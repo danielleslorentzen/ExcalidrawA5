@@ -31,6 +31,16 @@ export default defineConfig(({ command, isPreview }) => {
           orientation: "any",
           start_url: base,
           scope: base,
+          // Lets the installed app receive notebook backups: Android's share sheet
+          // (handled by public/share-target.js) and desktop "Open with".
+          share_target: {
+            action: `${base}share-target`,
+            method: "POST",
+            enctype: "multipart/form-data",
+            params: { files: [{ name: "file", accept: ["application/json", "text/json", ".json"] }] },
+          },
+          file_handlers: [{ action: base, accept: { "application/json": [".json"] } }],
+          launch_handler: { client_mode: ["focus-existing", "auto"] },
           icons: [
             { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
             { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
@@ -38,6 +48,7 @@ export default defineConfig(({ command, isPreview }) => {
           ],
         },
         workbox: {
+          importScripts: ["share-target.js"],
           globPatterns: ["**/*.{js,mjs,css,html,svg,png,woff2}"],
           // CJK font subsets are large and fetched on demand: cache at runtime instead.
           globIgnores: ["**/fonts/Xiaolai/**"],

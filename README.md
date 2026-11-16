@@ -58,6 +58,10 @@ storage. Each browser and device keeps its own separate notebook. Use **Menu →
 notebook** now and then. **Restore from backup** merges a backup into the current notebook
 and can move a notebook to another device.
 
+Once the app is installed you can also restore without opening the menu. On Android,
+share a backup `.json` file (from Files, Drive, email…) and pick **A5 Notes** in the share
+sheet. On desktop Chrome or Edge, right-click the file and choose **Open with → A5 Notes**.
+
 On iPhone/iPad, install the app to the home screen (Share → Add to Home Screen).
 Safari can clear storage for sites that aren't installed.
 
@@ -90,4 +94,5 @@ root later, set `BASE_PATH: /` in the workflow and add a `public/CNAME` file.
 | `src/exporting.ts` | Renders exactly the page area, then PDF / PNG / thumbnails |
 | `src/scans.ts` | Turns images and PDFs into page-sized background images |
 | `src/storage.ts` | IndexedDB persistence |
+| `src/incoming.ts`, `public/share-target.js` | Backups shared to the app (Android share sheet) or opened with it (desktop) |
 | `src/page.ts` | A5 geometry (scene units are 96 DPI CSS px; exports are 300 DPI) |

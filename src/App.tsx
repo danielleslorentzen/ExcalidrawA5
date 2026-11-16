@@ -18,6 +18,7 @@ import type {
   ExcalidrawInitialDataState,
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { onLaunchFiles, takeSharedFiles } from "./incoming";
 import type { NotebookBackup, NotebookIndex, PageContent, PageMeta, Section } from "./types";
 import {
   SECTION_COLORS,
@@ -819,6 +820,24 @@ export default function App() {
     },
     [flushSave, mutateIndex, run, scheduleThumb, showPage, toast],
   );
+
+  // Backups shared to the app (Android share sheet) or opened with it (desktop "Open with").
+  const incomingHandled = useRef(false);
+  const restoreRef = useRef(restoreBackup);
+  restoreRef.current = restoreBackup;
+  const ready = !!api && !!index;
+  useEffect(() => {
+    if (!ready || incomingHandled.current) return;
+    incomingHandled.current = true;
+    const restoreAll = async (files: File[]) => {
+      for (const file of files) await restoreRef.current(file);
+    };
+    onLaunchFiles((files) => void restoreAll(files));
+    void takeSharedFiles().then((files) => {
+      if (files === "error") toast("Couldn't read the shared file.", 5000);
+      else if (files) void restoreAll(files);
+    });
+  }, [ready, toast]);
 
   // ---------- UI ----------
 
