@@ -27,6 +27,18 @@ stock Excalidraw. Upgrading is a version bump.
 - **Print out.** Export an A5 PDF at 300 DPI, either one page or a whole section, or a
   300 DPI PNG. On phones and tablets the file goes to the share sheet. When printing,
   choose **Actual size / 100%**.
+- **More room for the page.**
+  - **Focus mode** (⛶ next to the page counter, or Alt+F) hides every toolbar and menu.
+    A small toolbar stays with select, pen, eraser, undo/redo, page flipping, fit, and
+    exit. It sits along the bottom when the screen is upright and down the right edge
+    when it's sideways. On phones and tablets, focus mode also goes full screen.
+  - **Full screen:** the installed app opens full screen, hiding Android's status and
+    navigation bars (swipe in from an edge to reveal them). In a browser tab, use
+    **Menu → Full screen**. iPhones don't support this.
+  - **Fit page to width** (in the menu or the focus toolbar) fills the screen width
+    and you scroll down the page, which is handy in landscape.
+  - On phones, the page navigator sits inside Excalidraw's bottom bar instead of
+    adding its own row.
 - **Offline PWA.** Fonts are self-hosted and everything is cached by a service worker,
   so you can install it to your home screen or desktop and it works without a network.
 

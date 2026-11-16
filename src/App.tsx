@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CaptureUpdateAction,
   Excalidraw,
@@ -10,7 +10,6 @@ import {
   loadFromBlob,
   restoreElements,
   serializeAsJSON,
-  useDevice,
 } from "@excalidraw/excalidraw";
 import type {
   AppState,
@@ -38,6 +37,15 @@ import { buildPdf, buildPng, deliverFile, renderThumbnail } from "./exporting";
 import { contentFromScan, filesToScans, orientationFor, scanToElement } from "./scans";
 import { pageLabel, pageSize } from "./page";
 import { PageBackdrop } from "./PageBackdrop";
+import {
+  FocusBar,
+  PhoneBottomBarSlot,
+  canToggleFullscreen,
+  isTouchDevice,
+  setFullscreen,
+  useFullscreen,
+  type FitMode,
+} from "./screen";
 import { PagesPanel, type Layout, type PanelActions } from "./PagesPanel";
 import {
   CheckboxOffIcon,
@@ -46,6 +54,8 @@ import {
   ChevronRight,
   DownloadIcon,
   FileIcon,
+  FocusIcon,
+  FullscreenIcon,
   ImageIcon,
   PagesIcon,
   PdfIcon,
@@ -59,6 +69,7 @@ const SIDEBAR = "pages";
 const PREFS_KEY = "a5x-prefs";
 const DOCKED_KEY = "a5x-sidebar-docked";
 const PRINT_RULING_KEY = "a5x-print-ruling";
+const FIT_MODE_KEY = "a5x-fit-mode";
 const SAVE_DELAY = 400;
 const THUMB_DELAY = 1500;
 
@@ -118,12 +129,6 @@ const orderedPages = (index: NotebookIndex) =>
 
 const isMobileWidth = () => window.innerWidth < 730;
 
-/** Renders its children (floating above the bottom bar) only in Excalidraw's phone layout. */
-function MobileOnly({ children }: { children: ReactNode }) {
-  const device = useDevice();
-  return device.editor.isMobile ? <div className="a5-nav-floating">{children}</div> : null;
-}
-
 export default function App() {
   const [index, setIndex] = useState<NotebookIndex | null>(null);
   const [currentPageId, setCurrentPageId] = useState<string>("");
@@ -133,6 +138,13 @@ export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => readJSON(PREFS_KEY, {} as { theme?: "light" | "dark" }).theme ?? "light");
   const [docked, setDocked] = useState<boolean>(() => readJSON(DOCKED_KEY, false));
   const [printRuling, setPrintRuling] = useState<boolean>(() => readJSON(PRINT_RULING_KEY, false));
+  const [focus, setFocus] = useState(false);
+  const [fitMode, setFitMode] = useState<FitMode>(() => readJSON(FIT_MODE_KEY, "page"));
+  const [activeTool, setActiveTool] = useState("selection");
+  const fullscreen = useFullscreen();
+  const focusRef = useRef(false);
+  const fitModeRef = useRef<FitMode>(fitMode);
+  const focusOpenedFullscreen = useRef(false);
 
   const indexRef = useRef<NotebookIndex | null>(null);
   const currentRef = useRef("");
@@ -186,18 +198,35 @@ export default function App() {
 
   // ---------- viewport ----------
 
+  /**
+   * Zooms and centres the page in the space the UI leaves free. In focus mode
+   * that's nearly the whole screen. "width" fit fills the width and starts at
+   * the top of the page (you scroll down), which suits landscape screens.
+   */
   const fitPage = useCallback(
     (meta: PageMeta | undefined) => {
       if (!api || !meta) return;
       const { width: w, height: h } = api.getAppState();
       const page = pageSize(meta.orientation);
       const mobile = isMobileWidth();
-      const top = mobile ? 72 : 76;
-      const bottom = mobile ? 136 : 64;
-      const side = mobile ? 12 : 32;
-      const zoom = Math.max(0.1, Math.min(4, (w - side * 2) / page.width, (h - top - bottom) / page.height));
-      const scrollX = (w / zoom - page.width) / 2;
-      const scrollY = (top + (h - top - bottom - page.height * zoom) / 2) / zoom;
+      const landscape = w > h;
+      let top: number, bottom: number, left: number, right: number;
+      if (focusRef.current) {
+        // Leave room for the focus toolbar: along the bottom in portrait, the right edge in landscape.
+        top = left = 6;
+        bottom = landscape ? 6 : 60;
+        right = landscape ? 60 : 6;
+      } else {
+        top = mobile ? 72 : 76;
+        bottom = mobile ? 80 : 64;
+        left = right = mobile ? 10 : 32;
+      }
+      const availW = w - left - right;
+      const availH = h - top - bottom;
+      const byWidth = fitModeRef.current === "width";
+      const zoom = Math.max(0.1, Math.min(4, byWidth ? availW / page.width : Math.min(availW / page.width, availH / page.height)));
+      const scrollX = (left + (availW - page.width * zoom) / 2) / zoom;
+      const scrollY = (byWidth && page.height * zoom > availH ? top : top + (availH - page.height * zoom) / 2) / zoom;
       api.updateScene({
         appState: { zoom: { value: zoom as AppState["zoom"]["value"] }, scrollX, scrollY },
         captureUpdate: CaptureUpdateAction.NEVER,
@@ -261,6 +290,7 @@ export default function App() {
         queueMicrotask(() => api?.updateScene({ appState: { viewBackgroundColor: "transparent" } }));
       }
       if (appState.theme !== theme) setTheme(appState.theme);
+      if (appState.activeTool.type !== activeTool) setActiveTool(appState.activeTool.type);
       const prefs = Object.fromEntries(PREF_KEYS.map((k) => [k, appState[k]]));
       const json = JSON.stringify(prefs);
       if (json !== prefsJson.current) {
@@ -275,7 +305,7 @@ export default function App() {
       clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => void flushSave(), SAVE_DELAY);
     },
-    [api, theme, flushSave],
+    [api, theme, activeTool, flushSave],
   );
 
   // ---------- navigation ----------
@@ -323,17 +353,78 @@ export default function App() {
     [showPage],
   );
 
-  // Alt+PageUp / Alt+PageDown flip pages.
+  // ---------- screen space ----------
+
+  const toggleFocus = useCallback(
+    (on = !focusRef.current) => {
+      focusRef.current = on;
+      setFocus(on);
+      if (on) {
+        api?.toggleSidebar({ name: SIDEBAR, force: false });
+        // On phones/tablets, focus mode also hides the system bars.
+        if (isTouchDevice() && canToggleFullscreen() && !document.fullscreenElement) {
+          focusOpenedFullscreen.current = true;
+          void setFullscreen(true);
+        }
+      } else if (focusOpenedFullscreen.current) {
+        focusOpenedFullscreen.current = false;
+        void setFullscreen(false);
+      }
+      requestAnimationFrame(() => fitPage(metaOf(currentRef.current)));
+    },
+    [api, fitPage],
+  );
+
+  const toggleFitMode = useCallback(() => {
+    const next: FitMode = fitModeRef.current === "page" ? "width" : "page";
+    fitModeRef.current = next;
+    setFitMode(next);
+    writeJSON(FIT_MODE_KEY, next);
+    fitPage(metaOf(currentRef.current));
+  }, [fitPage]);
+
+  // Leaving full screen with the system back gesture also leaves focus mode's full screen.
+  useEffect(() => {
+    if (!fullscreen) focusOpenedFullscreen.current = false;
+  }, [fullscreen]);
+
+  // Re-fit when the screen rotates, or when the window changes size in focus mode
+  // (e.g. entering/leaving full screen). Otherwise leave your zoom alone.
+  useEffect(() => {
+    let timer = 0;
+    let wasLandscape = window.innerWidth > window.innerHeight;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const landscape = window.innerWidth > window.innerHeight;
+        if (focusRef.current || landscape !== wasLandscape) fitPage(metaOf(currentRef.current));
+        wasLandscape = landscape;
+      }, 150);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [fitPage]);
+
+  // Alt+PageUp / Alt+PageDown flip pages; Alt+F toggles focus mode.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || (e.key !== "PageUp" && e.key !== "PageDown")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      step(e.key === "PageUp" ? -1 : 1);
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === "PageUp" || e.key === "PageDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        step(e.key === "PageUp" ? -1 : 1);
+      } else if (e.code === "KeyF" && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFocus();
+      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [step]);
+  }, [step, toggleFocus]);
 
   // ---------- toasts ----------
 
@@ -745,8 +836,14 @@ export default function App() {
       <button className="a5-nav-btn" title="Next page (Alt+PageDown)" disabled={position >= order.length - 1} onClick={() => step(1)}>
         {ChevronRight}
       </button>
-      <button className="a5-nav-btn" title="New page" onClick={() => void addPage()}>
-        {PlusIcon}
+      {/* The phone bottom bar is tight; New page stays in the menu and Notebook panel there. */}
+      {placement !== "a5-nav-inbar" && (
+        <button className="a5-nav-btn" title="New page" onClick={() => void addPage()}>
+          {PlusIcon}
+        </button>
+      )}
+      <button className="a5-nav-btn" title="Focus mode: hide everything but the page (Alt+F)" onClick={() => toggleFocus(true)}>
+        {FocusIcon}
       </button>
     </div>
   );
@@ -754,7 +851,9 @@ export default function App() {
   if (!index || !initialData) return <div className="a5-loading">Opening notebook…</div>;
 
   return (
-    <div className="a5-app">
+    <div className={`a5-app ${focus ? "a5-focus" : ""} ${theme === "dark" ? "a5-dark" : ""}`}>
+      {/* The stage stays clear of notches/rounded corners when running full screen. */}
+      <div className="a5-stage">
       <PageBackdrop api={api} meta={currentMeta} theme={theme} />
       <div className="a5-canvas">
         <Excalidraw
@@ -775,8 +874,21 @@ export default function App() {
             },
           }}
         >
-          <MobileOnly>{pageNav(true)}</MobileOnly>
+          <PhoneBottomBarSlot>{pageNav(true, "a5-nav-inbar")}</PhoneBottomBarSlot>
           <Footer>{pageNav(true, "a5-nav-footer")}</Footer>
+          {focus && (
+            <FocusBar
+              api={api}
+              activeTool={activeTool}
+              canPrev={position > 0}
+              canNext={position < order.length - 1}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+              fitMode={fitMode}
+              onToggleFit={toggleFitMode}
+              onExit={() => toggleFocus(false)}
+            />
+          )}
 
           <MainMenu>
             <MainMenu.Item icon={PagesIcon} onSelect={() => api?.toggleSidebar({ name: SIDEBAR, force: true })}>
@@ -787,6 +899,31 @@ export default function App() {
             </MainMenu.Item>
             <MainMenu.Item icon={ScanIcon} onSelect={() => scanInput.current?.click()}>
               Import scan / photo / PDF…
+            </MainMenu.Item>
+            <MainMenu.Separator />
+            <MainMenu.Item icon={FocusIcon} shortcut="Alt+F" onSelect={() => toggleFocus(true)}>
+              Focus mode
+            </MainMenu.Item>
+            {canToggleFullscreen() && (
+              <MainMenu.Item
+                icon={fullscreen ? CheckboxOnIcon : FullscreenIcon}
+                selected={fullscreen}
+                onSelect={() => void setFullscreen(!fullscreen)}
+              >
+                Full screen
+              </MainMenu.Item>
+            )}
+            <MainMenu.Item
+              icon={fitMode === "width" ? CheckboxOnIcon : CheckboxOffIcon}
+              selected={fitMode === "width"}
+              role="menuitemcheckbox"
+              aria-checked={fitMode === "width"}
+              onSelect={(event) => {
+                event.preventDefault();
+                toggleFitMode();
+              }}
+            >
+              Fit page to width
             </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.Item icon={PdfIcon} onSelect={() => void exportPagesPdf([currentPageId], currentMeta?.title ?? "page")}>
@@ -854,6 +991,7 @@ export default function App() {
             <PagesPanel index={index} currentPageId={currentPageId} thumbs={thumbs} actions={panelActions} />
           </Sidebar>
         </Excalidraw>
+      </div>
       </div>
 
       <input

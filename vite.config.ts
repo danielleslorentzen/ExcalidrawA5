@@ -24,7 +24,10 @@ export default defineConfig(({ command, isPreview }) => {
           description: "Excalidraw locked to A5 pages, for a discbound paper notebook.",
           theme_color: "#ffffff",
           background_color: "#ffffff",
-          display: "standalone",
+          // Installed app opens full screen (hides Android's status and navigation bars;
+          // swipe from an edge to reveal them). Browsers without it fall back to standalone.
+          display: "fullscreen",
+          display_override: ["fullscreen", "standalone"],
           orientation: "any",
           start_url: base,
           scope: base,

@@ -19,6 +19,18 @@ body,
   position: fixed;
   inset: 0;
   height: 100dvh;
+  background: #e9ecef;
+}
+.a5-app.a5-dark {
+  background: #2b2c30;
+}
+/* Keeps the drawing area clear of notches and rounded corners in full screen. */
+.a5-stage {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
 }
 
 /* ---------- the desk and the A5 sheet (drawn behind a transparent canvas) ---------- */
@@ -140,6 +152,118 @@ body,
 .a5-nav-floating .a5-nav button {
   height: 2.75rem;
   min-width: 2.75rem;
+}
+
+/* ==========================================================================
+   Hooks into Excalidraw's own UI. These selectors target Excalidraw's internal
+   class names, so check this block first after upgrading @excalidraw/excalidraw.
+   ========================================================================== */
+
+/* Phone: the page navigator lives inside Excalidraw's bottom bar, between the
+   menu (and the Edit/Duplicate/Delete buttons) and undo/redo. */
+.App-bottom-bar .App-toolbar-content > .a5-inbar {
+  order: 1;
+  display: flex;
+}
+.App-bottom-bar .App-toolbar-content > div:not(.a5-inbar) {
+  order: 2;
+}
+.a5-inbar .a5-nav {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.a5-inbar .a5-nav button {
+  min-width: 2.1rem;
+  padding: 0 4px;
+}
+/* When elements are selected the bar fills with Edit/Duplicate/Delete: make room.
+   (A drawing tool alone only adds Edit, which still fits.) */
+.App-toolbar-content:has(.ToolIcon_type_button--show[aria-label="Duplicate"]) > .a5-inbar {
+  display: none;
+}
+
+/* Focus mode: hide Excalidraw's tool bars, menus, footer and hints; our
+   focus toolbar takes over. */
+.a5-focus .excalidraw .FixedSideContainer_side_top,
+.a5-focus .excalidraw .layer-ui__wrapper__footer,
+.a5-focus .excalidraw .App-top-bar,
+.a5-focus .excalidraw .App-bottom-bar,
+.a5-focus .excalidraw .HintViewer,
+.a5-focus .excalidraw .a5-nav-floating {
+  display: none !important;
+}
+
+/* ---------- focus mode toolbar ---------- */
+
+.a5-focusbar {
+  position: fixed;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--island-bg-color, #fff) 86%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-island), 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.a5-focusbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--icon-fill-color, var(--text-primary-color));
+  cursor: pointer;
+}
+.a5-focusbar button:hover:not(:disabled) {
+  background: var(--button-hover-bg, rgba(0, 0, 0, 0.05));
+}
+.a5-focusbar button.is-active {
+  background: var(--color-surface-primary-container, #e0dfff);
+  color: var(--color-on-primary-container, #030064);
+}
+.a5-focusbar button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.a5-focusbar-sep {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: var(--default-border-color, #ddd);
+}
+/* Portrait: along the bottom, where an A5 page leaves spare height. */
+@media (orientation: portrait) {
+  .a5-focusbar {
+    left: 50%;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+  }
+}
+/* Landscape: down the right edge, where it leaves spare width. */
+@media (orientation: landscape) {
+  .a5-focusbar {
+    top: 50%;
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    transform: translateY(-50%);
+    flex-direction: column;
+    flex-wrap: wrap-reverse;
+    max-height: calc(100dvh - 16px);
+  }
+  .a5-focusbar-sep {
+    width: 22px;
+    height: 1px;
+    margin: 2px 0;
+  }
 }
 
 /* ---------- pages sidebar ---------- */
