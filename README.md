@@ -17,6 +17,15 @@ stock Excalidraw. Upgrading is a version bump.
   sections. Drag thumbnails to reorder pages or drop them into another section, and drag
   a section's grip (⠿) to reorder sections. On touch screens, press and hold before
   dragging. Use ‹ › or Alt+PageUp / Alt+PageDown to flip pages.
+- **Paper-sized pens and text.**
+  - The three stroke widths are finer than Excalidraw's defaults, scaled for an A5
+    page: roughly a fine liner, a 0.5 mm gel pen, and a marker. The values are in
+    `src/strokeWidths.json` and are applied to the Excalidraw package at install time
+    by `scripts/patch-excalidraw.mjs`.
+  - On ruled, dot and grid pages, text you write or move snaps to the ruling. Line
+    spacing becomes exactly one ruling step (two for large text), and baselines sit on
+    the lines or dot rows. Text that's already on a page isn't moved until you edit
+    it. Turn it off with **Menu → Snap text to ruling**.
 - **Paper guides.** You can show dot, lined or grid ruling, plus a shaded strip on the
   side where the discs go. The disc strip is never printed. The ruling is printed only
   when **Menu → Print paper ruling** is on, for example when printing onto blank paper.

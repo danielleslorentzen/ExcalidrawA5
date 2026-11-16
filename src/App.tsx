@@ -35,8 +35,10 @@ import {
 } from "./storage";
 import { buildPdf, buildPng, deliverFile, renderThumbnail } from "./exporting";
 import { contentFromScan, filesToScans, orientationFor, scanToElement } from "./scans";
-import { pageLabel, pageSize } from "./page";
+import { MM, RULING_MM, pageLabel, pageSize } from "./page";
 import { PageBackdrop } from "./PageBackdrop";
+import { TextRulingTracker } from "./textRuling";
+import STROKE_PRESETS from "./strokeWidths.json";
 import {
   FocusBar,
   PhoneBottomBarSlot,
@@ -70,6 +72,7 @@ const PREFS_KEY = "a5x-prefs";
 const DOCKED_KEY = "a5x-sidebar-docked";
 const PRINT_RULING_KEY = "a5x-print-ruling";
 const FIT_MODE_KEY = "a5x-fit-mode";
+const SNAP_TEXT_KEY = "a5x-snap-text";
 const SAVE_DELAY = 400;
 const THUMB_DELAY = 1500;
 
@@ -145,6 +148,11 @@ export default function App() {
   const focusRef = useRef(false);
   const fitModeRef = useRef<FitMode>(fitMode);
   const focusOpenedFullscreen = useRef(false);
+  const [snapText, setSnapText] = useState<boolean>(() => readJSON(SNAP_TEXT_KEY, true));
+  const snapTextRef = useRef(snapText);
+  const textRuling = useRef(new TextRulingTracker());
+  /** Set until the first onChange after load, which records the page's existing text. */
+  const textBaselinePending = useRef(true);
 
   const indexRef = useRef<NotebookIndex | null>(null);
   const currentRef = useRef("");
@@ -181,6 +189,11 @@ export default function App() {
       const id = idx.pages.some((p) => p.id === idx.lastPageId) ? idx.lastPageId! : orderedPages(idx)[0].id;
       const content = await loadPage(id);
       const prefs = readJSON<Partial<AppState>>(PREFS_KEY, {});
+      // Saved widths from before the finer presets (or none yet) → the medium preset.
+      const presets = [STROKE_PRESETS.thin, STROKE_PRESETS.bold, STROKE_PRESETS.extraBold];
+      if (!presets.includes(prefs.currentItemStrokeWidth as number)) {
+        prefs.currentItemStrokeWidth = STROKE_PRESETS.bold;
+      }
       indexRef.current = idx;
       currentRef.current = id;
       setIndex(idx);
@@ -299,6 +312,26 @@ export default function App() {
       }
 
       if (switching.current || !currentRef.current) return;
+
+      // Snap new/edited text to the page ruling (not while dragging, resizing or drawing).
+      if (textBaselinePending.current) {
+        textRuling.current.baseline(elements);
+        textBaselinePending.current = false;
+      } else if (
+        snapTextRef.current &&
+        !appState.selectedElementsAreBeingDragged &&
+        !appState.isResizing &&
+        !appState.isRotating &&
+        !appState.newElement
+      ) {
+        queueMicrotask(() => {
+          const meta = metaOf(currentRef.current);
+          if (!api || !meta || meta.paper === "blank" || switching.current) return;
+          const next = textRuling.current.align(api.getSceneElementsIncludingDeleted(), RULING_MM[meta.paper] * MM);
+          if (next) api.updateScene({ elements: next, captureUpdate: CaptureUpdateAction.EVENTUALLY });
+        });
+      }
+
       const key = saveKey(elements, files);
       if (key === lastSavedKey.current) return;
       pending.current = { pageId: currentRef.current, elements, files, key };
@@ -327,6 +360,8 @@ export default function App() {
           captureUpdate: CaptureUpdateAction.NEVER,
         });
         api.history.clear();
+        textRuling.current.baseline(api.getSceneElements());
+        textBaselinePending.current = false;
         lastSavedKey.current = saveKey(elements, api.getFiles());
         fitPage(metaOf(id));
         mutateIndex((idx) => ({ ...idx, lastPageId: id }));
@@ -924,6 +959,20 @@ export default function App() {
               }}
             >
               Fit page to width
+            </MainMenu.Item>
+            <MainMenu.Item
+              icon={snapText ? CheckboxOnIcon : CheckboxOffIcon}
+              selected={snapText}
+              role="menuitemcheckbox"
+              aria-checked={snapText}
+              onSelect={(event) => {
+                event.preventDefault();
+                snapTextRef.current = !snapText;
+                setSnapText(!snapText);
+                writeJSON(SNAP_TEXT_KEY, !snapText);
+              }}
+            >
+              Snap text to ruling
             </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.Item icon={PdfIcon} onSelect={() => void exportPagesPdf([currentPageId], currentMeta?.title ?? "page")}>

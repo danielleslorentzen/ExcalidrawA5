@@ -1,0 +1,6 @@
+{
+  "_comment": "Excalidraw's thin / bold / extra-bold stroke widths in scene units (1 unit = 1/96 inch on the A5 page). Excalidraw's defaults are 1 / 2 / 4, made for screen-sized drawings; the pen tool draws at 4.25x this value. Applied to the installed package by scripts/patch-excalidraw.mjs.",
+  "thin": 0.5,
+  "bold": 0.8,
+  "extraBold": 1.5
+}
