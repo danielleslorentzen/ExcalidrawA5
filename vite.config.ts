@@ -22,7 +22,7 @@ export default defineConfig(({ command, isPreview }) => {
           name: "A5 Excalidraw",
           short_name: "A5 Notes",
           description: "Excalidraw locked to A5 pages, for a discbound paper notebook.",
-          theme_color: "#ffffff",
+          theme_color: "#e9ecef",
           background_color: "#ffffff",
           // Installed app opens full screen (hides Android's status and navigation bars;
           // swipe from an edge to reveal them). Browsers without it fall back to standalone.

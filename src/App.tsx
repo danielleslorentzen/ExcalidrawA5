@@ -821,6 +821,12 @@ export default function App() {
     [flushSave, mutateIndex, run, scheduleThumb, showPage, toast],
   );
 
+  // Installed desktop app: tint the window's title bar to match the desk colour
+  // around the page (see --a5-desk in styles.css), so it follows the theme.
+  useEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#2b2c30" : "#e9ecef");
+  }, [theme]);
+
   // Backups shared to the app (Android share sheet) or opened with it (desktop "Open with").
   const incomingHandled = useRef(false);
   const restoreRef = useRef(restoreBackup);
