@@ -85,6 +85,27 @@ export const SectionIcon = (
     <path d="M19 11h2v4h-2" />
   </svg>
 );
+export const CheckboxOnIcon = (
+  <svg {...base}>
+    <rect x="4" y="4" width="16" height="16" rx="3" />
+    <path d="M8 12.5l2.5 2.5 5.5-6" />
+  </svg>
+);
+export const CheckboxOffIcon = (
+  <svg {...base}>
+    <rect x="4" y="4" width="16" height="16" rx="3" />
+  </svg>
+);
+export const GripIcon = (
+  <svg {...base} width={16} height={16}>
+    <circle cx="9" cy="6" r="1" fill="currentColor" />
+    <circle cx="15" cy="6" r="1" fill="currentColor" />
+    <circle cx="9" cy="12" r="1" fill="currentColor" />
+    <circle cx="15" cy="12" r="1" fill="currentColor" />
+    <circle cx="9" cy="18" r="1" fill="currentColor" />
+    <circle cx="15" cy="18" r="1" fill="currentColor" />
+  </svg>
+);
 export const SearchIcon = (
   <svg {...base} width={16} height={16}>
     <circle cx="11" cy="11" r="6" />

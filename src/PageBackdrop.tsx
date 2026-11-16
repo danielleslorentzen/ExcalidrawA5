@@ -1,12 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { PageMeta } from "./types";
-import { BINDING_MARGIN_MM, MM, pageSize } from "./page";
+import { BINDING_MARGIN_MM, MM, RULING_MM, pageSize } from "./page";
 
-/** Spacing of the on-screen ruling, in mm. */
-const DOT_MM = 5;
-const LINE_MM = 7;
-const GRID_MM = 5;
+const { dots: DOT_MM, lines: LINE_MM, grid: GRID_MM } = RULING_MM;
 
 /**
  * The page must always cross this band of the viewport (as a fraction of its

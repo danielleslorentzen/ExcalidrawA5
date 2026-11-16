@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   CaptureUpdateAction,
   Excalidraw,
+  Footer,
   MainMenu,
   Sidebar,
   getCommonBounds,
@@ -37,8 +38,10 @@ import { buildPdf, buildPng, deliverFile, renderThumbnail } from "./exporting";
 import { contentFromScan, filesToScans, orientationFor, scanToElement } from "./scans";
 import { pageLabel, pageSize } from "./page";
 import { PageBackdrop } from "./PageBackdrop";
-import { PagesPanel, type PanelActions } from "./PagesPanel";
+import { PagesPanel, type Layout, type PanelActions } from "./PagesPanel";
 import {
+  CheckboxOffIcon,
+  CheckboxOnIcon,
   ChevronLeft,
   ChevronRight,
   DownloadIcon,
@@ -55,6 +58,7 @@ import {
 const SIDEBAR = "pages";
 const PREFS_KEY = "a5x-prefs";
 const DOCKED_KEY = "a5x-sidebar-docked";
+const PRINT_RULING_KEY = "a5x-print-ruling";
 const SAVE_DELAY = 400;
 const THUMB_DELAY = 1500;
 
@@ -128,6 +132,7 @@ export default function App() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [theme, setTheme] = useState<"light" | "dark">(() => readJSON(PREFS_KEY, {} as { theme?: "light" | "dark" }).theme ?? "light");
   const [docked, setDocked] = useState<boolean>(() => readJSON(DOCKED_KEY, false));
+  const [printRuling, setPrintRuling] = useState<boolean>(() => readJSON(PRINT_RULING_KEY, false));
 
   const indexRef = useRef<NotebookIndex | null>(null);
   const currentRef = useRef("");
@@ -451,6 +456,38 @@ export default function App() {
     [mutateIndex],
   );
 
+  const reorderPages = useCallback(
+    (layout: Layout) =>
+      mutateIndex((idx) => {
+        const byId = new Map(idx.pages.map((p) => [p.id, p]));
+        const placed = new Set<string>();
+        const pages: PageMeta[] = [];
+        for (const s of idx.sections) {
+          for (const id of layout[s.id] ?? []) {
+            const p = byId.get(id);
+            if (p && !placed.has(id)) {
+              placed.add(id);
+              pages.push(p.sectionId === s.id ? p : { ...p, sectionId: s.id });
+            }
+          }
+        }
+        // Never drop a page that the layout somehow missed.
+        for (const p of idx.pages) if (!placed.has(p.id)) pages.push(p);
+        return { ...idx, pages };
+      }),
+    [mutateIndex],
+  );
+
+  const reorderSections = useCallback(
+    (ids: string[]) =>
+      mutateIndex((idx) => {
+        const rank = new Map(ids.map((id, i) => [id, i]));
+        const sections = [...idx.sections].sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
+        return { ...idx, sections };
+      }),
+    [mutateIndex],
+  );
+
   const addSection = useCallback(async () => {
     const name = prompt("Name for the new section (like a tab divider):", "New section")?.trim();
     if (!name) return;
@@ -516,10 +553,10 @@ export default function App() {
           const meta = metaOf(id);
           if (meta) pages.push({ meta, content: await loadPage(id) });
         }
-        await deliverFile(await buildPdf(pages), name, "pdf");
+        await deliverFile(await buildPdf(pages, { ruling: printRuling }), name, "pdf");
         return "PDF ready. When printing, choose “Actual size” (100%).";
       }),
-    [flushSave, run],
+    [flushSave, run, printRuling],
   );
 
   const exportCurrentPng = useCallback(
@@ -527,9 +564,9 @@ export default function App() {
       run("Rendering PNG…", async () => {
         await flushSave();
         const meta = metaOf(currentRef.current)!;
-        await deliverFile(await buildPng(meta, await loadPage(meta.id)), meta.title, "png");
+        await deliverFile(await buildPng(meta, await loadPage(meta.id), { ruling: printRuling }), meta.title, "png");
       }),
-    [flushSave, run],
+    [flushSave, run, printRuling],
   );
 
   const saveCurrentAsExcalidraw = useCallback(async () => {
@@ -671,6 +708,8 @@ export default function App() {
       deletePage: (id) => void deletePage(id),
       movePage,
       movePageToSection,
+      reorderPages,
+      reorderSections,
       updatePage,
       exportPagesPdf: (ids, name) => void exportPagesPdf(ids, name),
       addSection: () => void addSection(),
@@ -678,7 +717,7 @@ export default function App() {
       moveSection,
       deleteSection: (id) => void deleteSection(id),
     }),
-    [showPage, closeSidebarIfFloating, addPage, updatePage, duplicatePage, deletePage, movePage, movePageToSection, exportPagesPdf, addSection, updateSection, moveSection, deleteSection],
+    [showPage, closeSidebarIfFloating, addPage, updatePage, duplicatePage, deletePage, movePage, movePageToSection, reorderPages, reorderSections, exportPagesPdf, addSection, updateSection, moveSection, deleteSection],
   );
 
   const currentMeta = index?.pages.find((p) => p.id === currentPageId);
@@ -686,8 +725,8 @@ export default function App() {
   const position = order.findIndex((p) => p.id === currentPageId);
   const currentSection = index?.sections.find((s) => s.id === currentMeta?.sectionId);
 
-  const pageNav = (isMobile: boolean) => (
-    <div className="a5-nav">
+  const pageNav = (isMobile: boolean, placement = "") => (
+    <div className={`a5-nav ${placement}`}>
       <button className="a5-nav-btn" title="Previous page (Alt+PageUp)" disabled={position <= 0} onClick={() => step(-1)}>
         {ChevronLeft}
       </button>
@@ -724,7 +763,8 @@ export default function App() {
           onChange={onChange}
           handleKeyboardGlobally
           // On phones the top row is full of tools, so the navigator floats above the bottom bar instead.
-          renderTopRightUI={(isMobile) => (isMobile ? null : pageNav(false))}
+          // On narrower desktop windows it moves to the (otherwise empty) centre of the footer.
+          renderTopRightUI={(isMobile) => (isMobile ? null : pageNav(false, "a5-nav-top"))}
           UIOptions={{
             canvasActions: {
               changeViewBackgroundColor: false,
@@ -736,6 +776,7 @@ export default function App() {
           }}
         >
           <MobileOnly>{pageNav(true)}</MobileOnly>
+          <Footer>{pageNav(true, "a5-nav-footer")}</Footer>
 
           <MainMenu>
             <MainMenu.Item icon={PagesIcon} onSelect={() => api?.toggleSidebar({ name: SIDEBAR, force: true })}>
@@ -765,6 +806,19 @@ export default function App() {
             </MainMenu.Item>
             <MainMenu.Item icon={ImageIcon} onSelect={() => void exportCurrentPng()}>
               Export page as PNG (300 DPI)
+            </MainMenu.Item>
+            <MainMenu.Item
+              icon={printRuling ? CheckboxOnIcon : CheckboxOffIcon}
+              selected={printRuling}
+              aria-checked={printRuling}
+              role="menuitemcheckbox"
+              onSelect={(event) => {
+                event.preventDefault(); // keep the menu open so the toggle is visible
+                setPrintRuling(!printRuling);
+                writeJSON(PRINT_RULING_KEY, !printRuling);
+              }}
+            >
+              Print paper ruling (dots / lines / grid)
             </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.Item icon={FileIcon} onSelect={() => sceneInput.current?.click()}>

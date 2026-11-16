@@ -348,6 +348,61 @@ body,
   font-size: 16px;
 }
 
+/* ---------- drag and drop ---------- */
+
+.a5-thumb {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.a5-grip {
+  width: 28px;
+  margin-left: -4px;
+  cursor: grab;
+  touch-action: none;
+  color: var(--color-gray-40, #adb5bd);
+}
+.a5-card.is-dragging,
+.a5-section.is-dragging {
+  opacity: 0.35;
+}
+.a5-drag-ghost {
+  width: 110px;
+  cursor: grabbing;
+  transform: rotate(-2deg);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.25));
+}
+.a5-drag-ghost .a5-thumb {
+  outline: 2px solid var(--color-primary, #6965db);
+}
+.a5-drag-title {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.a5-drag-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px;
+  border-left: 4px solid var(--tab);
+  border-radius: 6px;
+  background: var(--island-bg-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  color: var(--text-primary-color);
+  font-weight: 600;
+  cursor: grabbing;
+}
+.a5-drag-section .a5-count {
+  margin-left: 8px;
+}
+
 .a5-add-first,
 .a5-add-section {
   display: flex;
@@ -494,6 +549,19 @@ body,
   background: var(--island-bg-color);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   font-weight: 600;
+}
+
+/* Narrow desktop windows: the tool bar needs the top row, so the navigator sits in the footer. */
+.a5-nav-footer {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .a5-nav-top {
+    display: none;
+  }
+  .a5-nav-footer {
+    display: flex;
+  }
 }
 
 @media (max-width: 729px) {

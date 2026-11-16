@@ -1,21 +1,67 @@
 import { exportToCanvas, convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawFrameLikeElement } from "@excalidraw/excalidraw/element/types";
-import type { PageContent, PageMeta } from "./types";
-import { PRINT_SCALE, pageSize, pageSizeMm, safeFileName } from "./page";
+import type { PageContent, PageMeta, Paper } from "./types";
+import { MM, PRINT_SCALE, RULING_MM, pageSize, pageSizeMm, safeFileName } from "./page";
+
+export interface ExportOptions {
+  /** Print the page's dot/line/grid ruling under the ink. */
+  ruling?: boolean;
+}
+
+/** Light grey that reads as printed notebook ruling. */
+const RULING_COLOR = "#b4b9be";
+
+/** Draws the page's ruling, matching the on-screen guides exactly. */
+function drawRuling(ctx: CanvasRenderingContext2D, paper: Paper, width: number, height: number, scale: number) {
+  if (paper === "blank") return;
+  const step = RULING_MM[paper] * MM * scale;
+  const px = MM * scale; // 1 mm in output pixels
+  ctx.save();
+  ctx.fillStyle = RULING_COLOR;
+  ctx.strokeStyle = RULING_COLOR;
+  if (paper === "dots") {
+    const r = 0.25 * px;
+    ctx.beginPath();
+    for (let y = step; y < height - 0.5; y += step) {
+      for (let x = step; x < width - 0.5; x += step) {
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
+    }
+    ctx.fill();
+  } else {
+    ctx.lineWidth = Math.max(1, 0.12 * px);
+    ctx.beginPath();
+    for (let y = step; y < height - 0.5; y += step) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    if (paper === "grid") {
+      for (let x = step; x < width - 0.5; x += step) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 /** Renders exactly the A5 page area (anything outside the page is cropped). */
-export async function renderPage(content: PageContent, meta: PageMeta, scale: number) {
+export async function renderPage(content: PageContent, meta: PageMeta, scale: number, opts: ExportOptions = {}) {
   const { width, height } = pageSize(meta.orientation);
   const [frame] = convertToExcalidrawElements([
     { type: "frame", x: 0, y: 0, width, height, children: [] },
   ]) as ExcalidrawFrameLikeElement[];
   const elements = content.elements.filter((el) => !el.isDeleted);
-  return exportToCanvas({
+  const withRuling = !!opts.ruling && meta.paper !== "blank";
+  const ink = await exportToCanvas({
     elements: [...elements, frame],
     files: content.files,
     exportingFrame: frame,
     appState: {
-      exportBackground: true,
+      // With ruling, render the ink on transparent and lay it over paper + ruling below.
+      exportBackground: !withRuling,
       viewBackgroundColor: "#ffffff",
       exportWithDarkMode: false,
       frameRendering: { enabled: true, name: false, outline: false, clip: false },
@@ -26,6 +72,16 @@ export async function renderPage(content: PageContent, meta: PageMeta, scale: nu
       scale,
     }),
   });
+  if (!withRuling) return ink;
+  const out = document.createElement("canvas");
+  out.width = ink.width;
+  out.height = ink.height;
+  const ctx = out.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, out.width, out.height);
+  drawRuling(ctx, meta.paper, out.width, out.height, scale);
+  ctx.drawImage(ink, 0, 0);
+  return out;
 }
 
 /** Long edge of a thumbnail, in pixels. */
@@ -41,7 +97,7 @@ const hasImages = (content: PageContent) =>
   content.elements.some((el) => el.type === "image" && !el.isDeleted);
 
 /** Builds a multi-page A5 PDF at print resolution, one notebook page per PDF page. */
-export async function buildPdf(pages: { meta: PageMeta; content: PageContent }[]) {
+export async function buildPdf(pages: { meta: PageMeta; content: PageContent }[], opts: ExportOptions = {}) {
   const { jsPDF } = await import("jspdf");
   let pdf: InstanceType<typeof jsPDF> | null = null;
   for (const { meta, content } of pages) {
@@ -51,7 +107,7 @@ export async function buildPdf(pages: { meta: PageMeta; content: PageContent }[]
     } else {
       pdf.addPage("a5", meta.orientation);
     }
-    const canvas = await renderPage(content, meta, PRINT_SCALE);
+    const canvas = await renderPage(content, meta, PRINT_SCALE, opts);
     // Photos/scans compress far better as JPEG; pure ink stays crisp as PNG.
     if (hasImages(content)) {
       pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, mm.width, mm.height);
@@ -63,8 +119,8 @@ export async function buildPdf(pages: { meta: PageMeta; content: PageContent }[]
   return pdf.output("blob");
 }
 
-export async function buildPng(meta: PageMeta, content: PageContent) {
-  const canvas = await renderPage(content, meta, PRINT_SCALE);
+export async function buildPng(meta: PageMeta, content: PageContent, opts: ExportOptions = {}) {
+  const canvas = await renderPage(content, meta, PRINT_SCALE, opts);
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b: Blob | null) => (b ? resolve(b) : reject(new Error("PNG export failed"))), "image/png"),
   );

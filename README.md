@@ -13,10 +13,13 @@ stock Excalidraw. Upgrading is a version bump.
 - **Every page is an A5 sheet.** The page is 148 × 210 mm (portrait or landscape) and you
   can't pan it out of view. Anything drawn past the edge is cropped on export.
 - **Notebook organisation.** Sections work like tab dividers, each with its own colour.
-  Pages show as thumbnails and you can search, rename, reorder, duplicate or move them
-  between sections. Use ‹ › or Alt+PageUp / Alt+PageDown to flip pages.
-- **Paper guides (on screen only).** You can show dot, lined or grid ruling, plus a
-  shaded strip on the side where the discs go. None of it is printed.
+  Pages show as thumbnails and you can search, rename, duplicate or move them between
+  sections. Drag thumbnails to reorder pages or drop them into another section, and drag
+  a section's grip (⠿) to reorder sections. On touch screens, press and hold before
+  dragging. Use ‹ › or Alt+PageUp / Alt+PageDown to flip pages.
+- **Paper guides.** You can show dot, lined or grid ruling, plus a shaded strip on the
+  side where the discs go. The disc strip is never printed. The ruling is printed only
+  when **Menu → Print paper ruling** is on, for example when printing onto blank paper.
 - **Scan in.** Import photos, scanner images or multi-page PDFs. Each image becomes a
   locked background on its own page. Scans that are already A5-shaped are stretched to
   fit the page edges exactly, so a re-print lines up with the original. On a phone the

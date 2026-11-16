@@ -9,6 +9,8 @@ export const PRINT_DPI = 300;
 export const PRINT_SCALE = PRINT_DPI / 96;
 /** Width of the disc-binding margin guide. */
 export const BINDING_MARGIN_MM = 12;
+/** Paper ruling spacing in mm. Rulings start at the page's top-left corner. */
+export const RULING_MM = { dots: 5, lines: 7, grid: 5 } as const;
 
 export const pageSizeMm = (orientation: Orientation) =>
   orientation === "portrait"
